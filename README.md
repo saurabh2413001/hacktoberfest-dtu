@@ -10,94 +10,637 @@ pinned: false
 
 # Accessibility Fixer
 
-Scan a web page for accessibility problems, let an **open-weight model** write the fixes, and **prove the page got better** with a re-scan.
+**Find accessibility problems. Let an open model suggest fixes. Then scan the page again to see if it actually got better.**
 
-> 21 issues → 1 on the bundled sample page. The numbers come from the scanner, never from the model.
+Accessibility Fixer is a small web tool that helps developers find and fix common accessibility problems in HTML pages.
+
+The idea is simple:
+
+> **Don't blindly trust AI. Let the scanner decide whether the page actually improved.**
+
+On the bundled sample page, the scanner detects **21 issues** before fixing and **1 issue** after fixing. Those numbers come directly from the scanner, not from the AI model.
+
+---
+
+## Why I built this
+
+Accessibility issues are easy to overlook.
+
+A page may look completely fine while still being difficult or impossible to use with a screen reader, keyboard navigation, browser zoom, or other assistive technologies.
+
+Some fixes are straightforward, such as removing a zoom restriction or correcting a contrast value. Others require understanding what an image, button, link, or form field actually means.
+
+That's where the language model comes in.
+
+Instead of asking an AI model to "make this page accessible" and trusting whatever it returns, Accessibility Fixer puts the model inside a verification pipeline.
+
+The model suggests fixes.
+
+The scanner decides whether those fixes actually worked.
+
+---
 
 ## How it works
 
+```text
+              HTML page
+          URL or pasted HTML
+                  │
+                  ▼
+        ┌───────────────────┐
+        │  1. Accessibility  │
+        │      Scanner       │
+        └─────────┬─────────┘
+                  │
+                  ▼
+          Find accessibility
+              problems
+                  │
+                  ▼
+        ┌───────────────────┐
+        │  2. Deterministic  │
+        │       Fixes        │
+        └─────────┬─────────┘
+                  │
+          Fix things that
+        have a clear answer
+                  │
+                  ▼
+        ┌───────────────────┐
+        │  3. Open-Weight    │
+        │       Model        │
+        └─────────┬─────────┘
+                  │
+        Generate contextual
+              fixes
+                  │
+                  ▼
+        ┌───────────────────┐
+        │  4. Quality Gate   │
+        └─────────┬─────────┘
+                  │
+          Reject bad answers
+                  │
+                  ▼
+        ┌───────────────────┐
+        │  5. Re-scan +      │
+        │      Retry         │
+        └─────────┬─────────┘
+                  │
+         Retry unresolved
+          issues once
+                  │
+                  ▼
+        ┌───────────────────┐
+        │   6. Final Report  │
+        └───────────────────┘
 ```
-page (URL or pasted HTML)
-   │
-   ▼
-1. Scanner ──────── finds issues (alt text, labels, titles, contrast, zoom, ...)
-   │
-   ▼
-2. Plain code ───── fixes what has one right answer (contrast ratios, zoom lock)
-   │
-   ▼
-3. Open model ───── writes what needs language: alt text, labels, button/link names,
-   │                page title, language code (Gemma 4 via Google AI Studio, or Llama on DigitalOcean)
-   ▼
-4. Quality gate ─── rejects empty, generic ("image", "click here") or rule-breaking answers
-   │
-   ▼
-5. Re-scan + retry ─ unresolved issues go back to the model once, with the reason they failed
-   │
-   ▼
-6. Report ───────── before/after counts from the scanner, a diff of every change, fixed HTML
+
+### 1. Scan
+
+The tool receives either:
+
+- a URL
+- or HTML pasted directly into the application.
+
+It scans the HTML for a focused set of accessibility problems, including things such as:
+
+- missing image alt text
+- missing form labels
+- unclear button/link names
+- missing page titles
+- missing language declarations
+- contrast problems in inline styles
+- zoom restrictions
+- other common HTML accessibility issues
+
+### 2. Fix deterministic problems
+
+Some accessibility fixes don't need an AI model.
+
+If there is a clear technical answer, the application handles it directly.
+
+For example:
+
+- removing a viewport setting that prevents zoom
+- correcting a measurable contrast problem
+- applying other rule-based HTML changes
+
+This keeps the model focused on the parts where context and language are actually required.
+
+### 3. Ask the open-weight model
+
+For problems where wording matters, the application sends the relevant HTML context to an open-weight model.
+
+The model can generate things such as:
+
+- descriptive alt text
+- form labels
+- button names
+- link names
+- page titles
+- language codes
+
+The model is currently designed to work with **Gemma 4** through Google AI Studio, with **Llama through DigitalOcean** as another provider option.
+
+### 4. Quality gate
+
+AI output isn't automatically accepted.
+
+The generated answer is checked before it can modify the page.
+
+For example, the quality gate can reject responses that are:
+
+- empty
+- too short
+- generic
+- `"image"`
+- `"click here"`
+- unrelated to the provided context
+- invalid for the type of accessibility issue
+- otherwise unsafe or unusable
+
+This is an important part of the project.
+
+The model is a **suggestion engine**, not the authority that decides whether a fix is valid.
+
+### 5. Re-scan and retry
+
+After the fixes are applied, the page is scanned again.
+
+If an AI-generated fix did not solve the issue, the application can send that issue back to the model **once more**, along with the reason the previous answer was rejected.
+
+This gives the model an opportunity to correct its mistake without allowing it to loop indefinitely.
+
+### 6. Report the result
+
+The final report shows:
+
+- issues before fixing
+- issues after fixing
+- every change that was made
+- rejected model responses
+- fixes that succeeded
+- issues that still need human attention
+- the resulting fixed HTML
+
+The improvement therefore comes from the scanner's before/after results, not from an AI-generated claim.
+
+---
+
+## Example
+
+The bundled sample page intentionally contains several accessibility problems.
+
+Running the pipeline produces results similar to:
+
+```text
+Before: 21 issues
+After:   1 issue
 ```
 
-The open model is the engine for step 3 and for the retry in step 5. The harness around it (steps 1, 2, 4, 5) is what makes its output trustworthy.
+The remaining issue is not hidden.
 
-## Run it locally
+For example, if the scanner finds a heading structure that needs human judgment, Accessibility Fixer leaves it alone and reports it instead of pretending that everything has been fixed.
 
-1. Create a free key at https://aistudio.google.com/apikey
-2. Install and start:
+---
+
+## The important idea
+
+There are plenty of tools that can tell you:
+
+> "Your website has accessibility problems."
+
+There are also tools that can ask an AI model:
+
+> "Can you fix this HTML?"
+
+Accessibility Fixer combines the two differently.
+
+```text
+             Scanner
+                │
+                ▼
+          Find the issue
+                │
+                ▼
+        ┌───────────────┐
+        │ Is there a    │
+        │ deterministic │
+        │ answer?       │
+        └───────┬───────┘
+          yes   │   no
+           │    │    │
+           ▼    │    ▼
+      Rule-based│   Open model
+          fix   │      │
+           │    │      ▼
+           │    │  Quality gate
+           │    │      │
+           └────┴──────┘
+                │
+                ▼
+             Re-scan
+                │
+                ▼
+          Did it improve?
+           │          │
+          yes         no
+           │          │
+           ▼          ▼
+         Report     Retry once
+```
+
+The model handles language.
+
+The rules handle deterministic changes.
+
+The scanner verifies the result.
+
+---
+
+# Running it locally
+
+## 1. Get an API key
+
+For the Gemma setup, create a free API key from Google AI Studio:
+
+[https://aistudio.google.com/apikey](https://aistudio.google.com/apikey)
+
+## 2. Create a virtual environment
+
+### Linux / macOS
 
 ```bash
-python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate
+```
+
+### Windows
+
+```powershell
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+## 3. Install dependencies
+
+```bash
 pip install -r requirements.txt
-export GEMINI_API_KEY="your-key"                        # Windows PowerShell: $env:GEMINI_API_KEY="your-key"
+```
+
+## 4. Configure the model
+
+### Linux / macOS
+
+```bash
+export GEMINI_API_KEY="your-key"
+```
+
+### Windows PowerShell
+
+```powershell
+$env:GEMINI_API_KEY="your-key"
+```
+
+## 5. Start the server
+
+```bash
 uvicorn app.main:app --port 8080
 ```
 
-3. Open http://localhost:8080/api/health. It should show `"key_set": true` and the model `gemma-4-31b-it`.
-4. Open http://localhost:8080 and press **Use the broken sample page**.
+Then open:
 
-Provider is chosen from the key you set: `GEMINI_API_KEY` uses Gemma 4 on Google AI Studio, `MODEL_ACCESS_KEY` uses DigitalOcean. Override with `LLM_MODEL` or `LLM_BASE_URL`.
+```text
+http://localhost:8080
+```
 
-If the model name is rejected, list the models your key can use:
+You can also check the health endpoint:
+
+```text
+http://localhost:8080/api/health
+```
+
+A healthy setup should report that the API key is configured and show the selected model.
+
+---
+
+# Model configuration
+
+The provider is selected based on the environment variables you provide.
+
+### Google AI Studio
+
+```bash
+GEMINI_API_KEY="your-key"
+```
+
+This uses Gemma through Google AI Studio.
+
+### DigitalOcean
+
+```bash
+MODEL_ACCESS_KEY="your-key"
+```
+
+The model and endpoint can also be overridden with:
+
+```bash
+LLM_MODEL="your-model"
+LLM_BASE_URL="your-endpoint"
+```
+
+If you are unsure which Gemma models are available for your API key, you can query Google's model list:
 
 ```bash
 curl "https://generativelanguage.googleapis.com/v1beta/models?key=$GEMINI_API_KEY"
 ```
 
-Look for ids starting with `gemma-4` (for example `gemma-4-31b-it` or `gemma-4-26b-a4b-it`).
+Look for model IDs beginning with:
 
-Gemma on the free tier has low rate limits. If you see `429` errors, wait a minute and retry, or switch to `gemma-4-26b-a4b-it`.
+```text
+gemma-4
+```
 
-## Test without any API key
+For example:
+
+```text
+gemma-4-31b-it
+gemma-4-26b-a4b-it
+```
+
+The free tier has relatively low rate limits. If you receive a `429` response, wait and try again, or use another available model.
+
+---
+
+# Run without an API key
+
+You can test the entire pipeline without connecting to a real model.
 
 ```bash
 python -m tests.test_pipeline
 ```
 
-This runs the whole pipeline with a fake model that gives lazy answers first, to prove the quality gate and retry loop work.
+The test uses a fake model that intentionally gives poor answers first.
 
-## Deploy
+That allows the test to demonstrate that:
 
-The app is a standard Docker web service listening on `$PORT` (default 8080), so any host that runs Docker will work. Set `GEMINI_API_KEY` as a secret environment variable, never in the repo. If you have DigitalOcean access, App Platform works: pick the repo, set the HTTP port to 8080, and add the key as an encrypted variable. If you have no hosting, running it locally for the demo is fine.
+1. the scanner finds the issues
+2. the model produces an answer
+3. the quality gate rejects a bad answer
+4. the retry mechanism runs
+5. the improved answer is accepted
+6. the page is scanned again
 
-## 60-second demo
+This is useful for testing the core idea without spending API requests.
 
-1. "Many sites are unusable for people who rely on screen readers or zoom, and fixing them by hand is slow." (Add one verified statistic here if you want, for example from the WebAIM Million report, and check the number before you say it.) Press **Use the broken sample page**.
-2. While the log streams, say: "A scanner finds the problems, the open model writes the fixes."
-3. Point at the big number going from 21 to 1. "The scanner counted this, not the AI."
-4. Open the changes list: show an alt text the model wrote from context, then a **quality gate rejection** ("image is too generic"). "We don't trust the model blindly."
-5. Show the one remaining item: "Heading order needs a human, so we left it alone."
-6. Paste a live URL to show it works on a real site.
+---
 
-## Honest limitations
+# Using the demo
 
-- **Static HTML only.** It reads the HTML the server returns and does not run JavaScript, so content rendered by client-side frameworks is not scanned. The rules are a focused subset of axe-core, not a replacement for it.
-- **The model cannot see images.** Alt text is inferred from file names, nearby text, captions and link context. A vision model would do better on photos.
-- **Contrast is checked for inline styles only**, not for CSS in `<style>` blocks or external files.
-- **Not everything is automatable.** Heading structure and many other issues need a person. Automated checks catch only part of real accessibility problems.
-- The fixed HTML is re-serialized by BeautifulSoup, so review the diff before copying changes back to your source.
+Once the server is running:
 
-## Stretch goals if you have time
+1. Open `http://localhost:8080`.
+2. Click **Use the broken sample page**.
+3. Start the accessibility fixing process.
+4. Watch the scanner and model pipeline run.
+5. Compare the before and after issue counts.
+6. Open the changes list to see what was modified.
+7. Look at rejected model responses to see the quality gate working.
+8. Review the remaining issue that still needs human attention.
+9. Try a URL or your own HTML.
 
-- Swap the scanner for axe-core running in headless Chromium (Playwright) to catch rendered-page issues.
-- Use a vision-capable open model for alt text.
-- Add a "pull request" mode that outputs a unified diff.
+---
+
+# 60-second demo
+
+If you're demonstrating the project, this is the story I would use:
+
+### 1. Start with the problem
+
+> "A website can look completely normal and still be difficult to use for people who rely on screen readers, keyboard navigation, or browser zoom. Finding and fixing these problems manually takes time."
+
+### 2. Show the broken page
+
+Click:
+
+**Use the broken sample page**
+
+### 3. Explain the pipeline
+
+> "The scanner finds the accessibility problems, and an open-weight model generates fixes for the issues that require language."
+
+### 4. Show the numbers
+
+Point at the before/after result:
+
+```text
+21 issues → 1 issue
+```
+
+Then explain:
+
+> "These numbers aren't generated by the AI. They're produced by the scanner before and after the fixes."
+
+### 5. Show the quality gate
+
+Show an example where the model produces something generic such as:
+
+```text
+image
+```
+
+The quality gate rejects it.
+
+Then show the better response generated on retry.
+
+> "We don't trust the model blindly. Bad answers are rejected and sent back for another attempt."
+
+### 6. Show the remaining issue
+
+> "The last issue needs human judgment, so the tool doesn't pretend it can automatically solve everything."
+
+### 7. Try a real page
+
+Paste a live URL and run the scanner.
+
+---
+
+# What the tool does not do
+
+Accessibility Fixer is intentionally not presented as a complete replacement for professional accessibility testing.
+
+There are several limitations.
+
+### Static HTML only
+
+The current scanner works with the HTML returned by the server.
+
+It does **not execute JavaScript**, so content generated by client-side frameworks may not be included in the scan.
+
+### Focused scanner
+
+The current rules cover a focused subset of common accessibility problems.
+
+It is not intended to replace a full accessibility testing framework such as axe-core.
+
+### The model cannot see images
+
+The language model currently infers alt text from information available in the HTML, such as:
+
+- file names
+- nearby text
+- captions
+- link context
+
+It does not actually see the image.
+
+A vision-capable model would be better for describing photographs and other visual content.
+
+### Contrast checking is limited
+
+The current contrast checker handles inline styles.
+
+It does not currently inspect:
+
+- `<style>` blocks
+- external CSS files
+- dynamically applied styles
+
+### Some problems need humans
+
+Not every accessibility decision can safely be automated.
+
+Heading structure is a good example.
+
+A tool can detect suspicious heading patterns, but deciding the correct document structure may require understanding the content and intent of the page.
+
+### HTML is re-serialized
+
+The fixed HTML is re-serialized using BeautifulSoup.
+
+Because of that, the resulting HTML may have formatting or serialization differences from the original.
+
+Always review the diff before copying the changes back into your actual source code.
+
+---
+
+# Project structure
+
+A simplified view of the project looks like this:
+
+```text
+.
+├── app/
+│   ├── main.py
+│   └── ...
+├── tests/
+│   └── test_pipeline.py
+├── requirements.txt
+├── Dockerfile
+└── README.md
+```
+
+The exact structure may change as the project grows.
+
+---
+
+# Deployment
+
+The application is a normal Docker-based web service.
+
+It listens on:
+
+```text
+$PORT
+```
+
+with `8080` as the default when running locally.
+
+Any hosting provider that can run a Docker web service should be able to host it.
+
+For example, with DigitalOcean App Platform:
+
+1. Connect the repository.
+2. Configure the service as a web service.
+3. Set the HTTP port to `8080`.
+4. Add the model API key as an encrypted environment variable.
+5. Deploy.
+
+**Never commit an API key to the repository.**
+
+Use environment variables or your hosting provider's secret management instead.
+
+---
+
+# Possible improvements
+
+There are several directions this project could take next.
+
+## 1. Use axe-core with Playwright
+
+Replace the current HTML-only scanner with axe-core running inside headless Chromium.
+
+That would allow the tool to inspect pages after JavaScript has executed.
+
+## 2. Add vision support
+
+Use a vision-capable open model to generate better alt text by actually analyzing images instead of relying only on HTML context.
+
+## 3. Pull request mode
+
+Generate a standard unified diff that developers can review and apply directly:
+
+```diff
+- <img src="farmer.jpg">
++ <img src="farmer.jpg" alt="Farmer inspecting crops in a field">
+```
+
+## 4. Continuous accessibility checks
+
+The same pipeline could eventually run automatically in CI/CD:
+
+```text
+Pull Request
+     │
+     ▼
+Accessibility scan
+     │
+     ▼
+Generate suggestions
+     │
+     ▼
+Quality gate
+     │
+     ▼
+Re-scan
+     │
+     ▼
+Pass / Fail
+```
+
+This would make accessibility checking part of the development workflow rather than something done only before deployment.
+
+---
+
+# Design principle
+
+The core principle behind Accessibility Fixer is:
+
+> **AI should suggest. Automated checks should verify. Humans should make the final call when context matters.**
+
+That separation is what makes the project useful beyond simply asking an LLM to rewrite some HTML.
+
+---
+
+# License
+
+Add your chosen license here.
+
+For example:
+
+```text
+MIT License
+```
+
+if the project is intended to be released under MIT.
