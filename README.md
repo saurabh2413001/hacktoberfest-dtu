@@ -1,3 +1,13 @@
+---
+title: Accessibility Fixer
+emoji: 🔍
+colorFrom: blue
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Accessibility Fixer
 
 Scan a web page for accessibility problems, let an **open-weight model** write the fixes, and **prove the page got better** with a re-scan.
