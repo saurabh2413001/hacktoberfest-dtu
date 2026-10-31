@@ -1,13 +1,3 @@
----
-title: Accessibility Fixer
-emoji: 🔍
-colorFrom: blue
-colorTo: blue
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # Accessibility Fixer
 
 **Find accessibility problems. Let an open model suggest fixes. Then scan the page again to see if it actually got better.**
@@ -633,14 +623,3 @@ That separation is what makes the project useful beyond simply asking an LLM to 
 
 ---
 
-# License
-
-Add your chosen license here.
-
-For example:
-
-```text
-MIT License
-```
-
-if the project is intended to be released under MIT.
