@@ -17,7 +17,7 @@ page (URL or pasted HTML)
    │
    ▼
 3. Open model ───── writes what needs language: alt text, labels, button/link names,
-   │                page title, language code (Llama 3.3 70B on DigitalOcean)
+   │                page title, language code (Gemma 4 via Google AI Studio, or Llama on DigitalOcean)
    ▼
 4. Quality gate ─── rejects empty, generic ("image", "click here") or rule-breaking answers
    │
@@ -32,23 +32,30 @@ The open model is the engine for step 3 and for the retry in step 5. The harness
 
 ## Run it locally
 
+1. Create a free key at https://aistudio.google.com/apikey
+2. Install and start:
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env            # then paste your Model Access Key
-export $(grep -v '^#' .env | xargs)
-uvicorn app.main:app --reload --port 8080
+export GEMINI_API_KEY="your-key"                        # Windows PowerShell: $env:GEMINI_API_KEY="your-key"
+uvicorn app.main:app --port 8080
 ```
 
-Open http://localhost:8080 and press **Use the broken sample page**.
+3. Open http://localhost:8080/api/health. It should show `"key_set": true` and the model `gemma-4-31b-it`.
+4. Open http://localhost:8080 and press **Use the broken sample page**.
 
-Check which models your key can use:
+Provider is chosen from the key you set: `GEMINI_API_KEY` uses Gemma 4 on Google AI Studio, `MODEL_ACCESS_KEY` uses DigitalOcean. Override with `LLM_MODEL` or `LLM_BASE_URL`.
+
+If the model name is rejected, list the models your key can use:
 
 ```bash
-curl https://inference.do-ai.run/v1/models -H "Authorization: Bearer $MODEL_ACCESS_KEY"
+curl "https://generativelanguage.googleapis.com/v1beta/models?key=$GEMINI_API_KEY"
 ```
 
-If `llama3.3-70b-instruct` is not listed, set `LLM_MODEL` to another instruct model from that list.
+Look for ids starting with `gemma-4` (for example `gemma-4-31b-it` or `gemma-4-26b-a4b-it`).
+
+Gemma on the free tier has low rate limits. If you see `429` errors, wait a minute and retry, or switch to `gemma-4-26b-a4b-it`.
 
 ## Test without any API key
 
@@ -58,13 +65,9 @@ python -m tests.test_pipeline
 
 This runs the whole pipeline with a fake model that gives lazy answers first, to prove the quality gate and retry loop work.
 
-## Deploy on DigitalOcean App Platform
+## Deploy
 
-1. Push this folder to a GitHub repo.
-2. DigitalOcean control panel → **Create → App Platform** → pick the repo. It detects the `Dockerfile`.
-3. Set HTTP port to `8080`.
-4. Add environment variable `MODEL_ACCESS_KEY` (mark it **Encrypted**). Optionally add `LLM_MODEL`.
-5. Deploy, then open `/api/health` on your app URL. It should show `"key_set": true`.
+The app is a standard Docker web service listening on `$PORT` (default 8080), so any host that runs Docker will work. Set `GEMINI_API_KEY` as a secret environment variable, never in the repo. If you have DigitalOcean access, App Platform works: pick the repo, set the HTTP port to 8080, and add the key as an encrypted variable. If you have no hosting, running it locally for the demo is fine.
 
 ## 60-second demo
 

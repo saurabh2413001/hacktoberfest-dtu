@@ -104,7 +104,7 @@ def fix(req: FixRequest):
 
 @app.get("/api/health")
 def health():
-    return {"ok": True, "model": fixer.MODEL, "key_set": bool(os.getenv("MODEL_ACCESS_KEY"))}
+    return {"ok": True, "model": fixer.MODEL, "endpoint": fixer.BASE_URL, "key_set": bool(fixer.API_KEY)}
 
 
 app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="static")

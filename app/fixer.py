@@ -20,7 +20,14 @@ from bs4 import BeautifulSoup, Comment, NavigableString, Tag
 
 from . import scanner as sc
 
-MODEL = os.getenv("LLM_MODEL", "llama3.3-70b-instruct")
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+DO_URL = "https://inference.do-ai.run/v1"
+_gemini_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+
+# Provider is picked from whichever key you set. LLM_* variables override everything.
+API_KEY = os.getenv("LLM_API_KEY") or _gemini_key or os.getenv("MODEL_ACCESS_KEY", "")
+BASE_URL = os.getenv("LLM_BASE_URL") or (GEMINI_URL if _gemini_key else DO_URL)
+MODEL = os.getenv("LLM_MODEL") or ("gemma-4-31b-it" if BASE_URL == GEMINI_URL else "llama3.3-70b-instruct")
 
 ALLOWED_ATTR = {
     "image-alt": "alt",
@@ -123,18 +130,35 @@ def context_for(issue: sc.Issue, soup: BeautifulSoup) -> dict:
 
 # ------------------------------------------------------------------ the model
 
+def _merge_system(messages: list[dict]) -> list[dict]:
+    """For models that reject a system role: fold it into the user message."""
+    system = "\n\n".join(m["content"] for m in messages if m["role"] == "system")
+    rest = [m for m in messages if m["role"] != "system"]
+    if rest and rest[0]["role"] == "user":
+        rest[0] = {"role": "user", "content": f"{system}\n\n---\n\n{rest[0]['content']}"}
+    return rest
+
+
 def call_llm(messages: list[dict]) -> str:
     from openai import OpenAI  # imported lazily so tests run without it
 
-    client = OpenAI(
-        base_url=os.getenv("LLM_BASE_URL", "https://inference.do-ai.run/v1"),
-        api_key=os.getenv("MODEL_ACCESS_KEY", ""),
-        timeout=90,
-    )
-    resp = client.chat.completions.create(
-        model=MODEL, messages=messages, temperature=0.2, max_tokens=2500
-    )
-    return resp.choices[0].message.content or ""
+    client = OpenAI(base_url=BASE_URL, api_key=API_KEY, timeout=90, max_retries=4)  # retries cover 429s
+
+    def ask(msgs):
+        resp = client.chat.completions.create(
+            model=MODEL, messages=msgs, temperature=0.2, max_tokens=2500
+        )
+        return resp.choices[0].message.content or ""
+
+    if os.getenv("LLM_NO_SYSTEM"):
+        return ask(_merge_system(messages))
+    try:
+        return ask(messages)
+    except Exception as exc:
+        text = str(exc).lower()
+        if "system" in text or "developer instruction" in text or "instruction" in text:
+            return ask(_merge_system(messages))  # model does not accept system prompts
+        raise
 
 
 def parse_json(text: str) -> list:
