@@ -1,0 +1,59 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1">
+<style>
+  body { font-family: Georgia, serif; margin: 0; color: #2a211b; background: #fff; }
+  header { background: #3b2a20; padding: 14px 24px; display: flex; gap: 24px; align-items: center; }
+  header a { color: #f3ece4; text-decoration: none; }
+  .hero { background: #f3ece4; padding: 32px 24px; display: flex; gap: 24px; align-items: center; flex-wrap: wrap; }
+  .hero img { max-width: 320px; border-radius: 8px; }
+  main { padding: 24px; max-width: 760px; }
+  figure { margin: 0 0 24px; }
+  form { display: grid; gap: 12px; max-width: 360px; }
+  input, select, textarea { padding: 8px; font: inherit; }
+  button { padding: 8px 14px; font: inherit; }
+</style>
+</head>
+<body>
+<header>
+  <a href="/"><img src="/img/logo.svg"></a>
+  <a href="/menu">Menu</a>
+  <a href="/pastries"><img src="/img/pastry-icon.svg"> Pastries</a>
+  <a href="https://instagram.com/brewandbyte"><svg width="20" height="20" viewBox="0 0 20 20"><rect x="2" y="2" width="16" height="16" rx="5" fill="none" stroke="#f3ece4" stroke-width="2"/><circle cx="10" cy="10" r="3.5" fill="none" stroke="#f3ece4" stroke-width="2"/></svg></a>
+</header>
+
+<div class="hero">
+  <img src="/img/hero-latte-art.svg">
+  <div>
+    <h1 style="color: #b9a89a">Brew &amp; Byte Café</h1>
+    <p style="color: #a39385">Small-batch coffee, fresh pastries and fast Wi-Fi in the heart of the old town.</p>
+  </div>
+</div>
+
+<main>
+  <h3>Meet the team</h3>
+  <figure>
+    <img src="/img/barista-maria.svg" width="240">
+    <figcaption>Maria, head roaster, has been tasting beans for twelve years.</figcaption>
+  </figure>
+  <p>Our latest single-origin harvest arrives every Thursday.</p>
+  <img src="/img/IMG_2231.svg" alt="IMG_2231.svg" width="240">
+  <img src="/img/spacer.svg" width="1" height="1">
+
+  <h2>Join the newsletter</h2>
+  <form>
+    <input type="text" name="full_name" placeholder="Your name">
+    <input type="email" name="email" placeholder="you@example.com">
+    <select name="cup_size"><option>Small</option><option>Medium</option><option>Large</option></select>
+    <textarea name="note" rows="3" placeholder="Anything we should know?"></textarea>
+    <button type="submit"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M2 8h10M8 3l5 5-5 5" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+  </form>
+
+  <h2>Find us</h2>
+  <iframe src="/img/map.svg" width="360" height="200"></iframe>
+  <p style="color: #999999; background: #ffffff">Open every day, 7am to 6pm. Closed on public holidays.</p>
+</main>
+</body>
+</html>

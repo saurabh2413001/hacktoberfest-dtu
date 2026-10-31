@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accessibility Fixer</title>
+<meta name="description" content="Scan a web page for accessibility problems. An open-weight model writes the fixes and a scanner checks each one.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f3f5fa;
+    --ink: #101a3a;
+    --muted: #4a5578;
+    --line: #c7cfe2;
+    --blue: #2340d8;
+    --blue-dark: #1a31ab;
+    --red: #a3141f;
+    --red-tint: #fbe6e6;
+    --green: #0b6b3a;
+    --green-tint: #dff3e7;
+    --amber: #7a4300;
+    --font: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Consolas, "Liberation Mono", monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 400 1.0625rem/1.6 var(--font);
+  }
+  .wrap { max-width: 60rem; margin: 0 auto; padding: 0 clamp(1rem, 4vw, 2rem) 5rem; }
+  .skip { position: absolute; left: -999px; top: 0; background: var(--ink); color: #fff; padding: .6rem 1rem; z-index: 10; }
+  .skip:focus { left: 1rem; top: 1rem; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+
+  header.top { display: flex; align-items: center; gap: .6rem; padding: 1.4rem 0 0; font-weight: 700; }
+  header.top svg { flex: none; }
+
+  h1 { font-size: clamp(2.3rem, 5.2vw, 3.7rem); line-height: 1.06; letter-spacing: -.022em; margin: 3rem 0 1rem; max-width: 17ch; }
+  .lede { font-size: 1.2rem; color: var(--muted); max-width: 40rem; margin: 0 0 2.5rem; }
+  h2 { font-size: 1.5rem; line-height: 1.25; margin: 3rem 0 .75rem; letter-spacing: -.01em; }
+
+  form { max-width: 44rem; }
+  fieldset { border: 0; padding: 0; margin: 0 0 1rem; display: flex; gap: 1.5rem; flex-wrap: wrap; }
+  legend { font-weight: 700; padding: 0; margin-bottom: .5rem; }
+  fieldset label { display: inline-flex; align-items: center; gap: .5rem; cursor: pointer; }
+  input[type=radio] { width: 1.15rem; height: 1.15rem; accent-color: var(--blue); }
+  .field label { display: block; font-weight: 700; margin-bottom: .35rem; }
+  input[type=url], textarea {
+    width: 100%; font: inherit; color: var(--ink); background: #fff;
+    border: 2px solid var(--ink); border-radius: 6px; padding: .7rem .85rem;
+  }
+  textarea { font-family: var(--mono); font-size: .9rem; resize: vertical; }
+  .actions { display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap; margin-top: 1.1rem; }
+  button { font: inherit; cursor: pointer; }
+  .primary {
+    background: var(--blue); color: #fff; font-weight: 700; border: 2px solid var(--blue);
+    border-radius: 8px; padding: .75rem 1.5rem;
+  }
+  .primary:hover { background: var(--blue-dark); border-color: var(--blue-dark); }
+  .primary:disabled { background: var(--muted); border-color: var(--muted); cursor: progress; }
+  .secondary {
+    background: transparent; color: var(--ink); font-weight: 700; border: 2px solid var(--ink);
+    border-radius: 8px; padding: .65rem 1.2rem;
+  }
+  .secondary:hover { background: var(--ink); color: #fff; }
+  .linkish { background: none; border: 0; padding: .3rem 0; color: var(--blue); font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+
+  #error { color: var(--red); font-weight: 700; margin: 1.25rem 0 0; max-width: 44rem; }
+
+  /* live log */
+  #progress ul { list-style: none; margin: 0; padding: 0; max-width: 48rem; }
+  #progress li { padding: .3rem 0 .3rem 1.4rem; position: relative; color: var(--muted); }
+  #progress li::before { content: ""; position: absolute; left: .2rem; top: .95em; width: .55rem; height: .55rem; border-radius: 50%; background: var(--line); }
+  #progress li.fix { color: var(--ink); }
+  #progress li.fix::before { background: var(--green); }
+  #progress li.rej { color: var(--amber); }
+  #progress li.rej::before { background: var(--amber); }
+  #progress li strong { font-weight: 700; }
+
+  /* the result */
+  .big { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 clamp(.75rem, 3vw, 2rem); margin: 3rem 0 .25rem;
+    font-weight: 700; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums;
+    font-size: clamp(4.5rem, 17vw, 10rem); }
+  .big .b { color: var(--red); }
+  .big .to { color: var(--muted); font-weight: 400; }
+  .big .a { color: var(--green); }
+  .sentence { font-size: 1.25rem; margin: 0 0 .5rem; max-width: 40rem; }
+  .meta { color: var(--muted); margin: 0 0 1.5rem; max-width: 44rem; }
+  #result h2:first-of-type { margin-top: 2.5rem; }
+  #result:focus, #result h2:focus { outline: none; }
+
+  ul.rows { list-style: none; margin: 0; padding: 0; }
+  ul.rows > li { padding: 1.1rem 0; border-top: 1px solid var(--line); }
+  .head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem 1rem; }
+  .title { font-weight: 700; }
+  .impact { font-size: .95rem; }
+  .impact.critical { color: var(--red); font-weight: 700; }
+  .impact.serious { color: var(--amber); font-weight: 700; }
+  .impact.moderate, .impact.minor { color: var(--muted); font-weight: 700; }
+  .src { color: var(--muted); font-size: .95rem; }
+  .why { margin: .3rem 0 .6rem; color: var(--muted); }
+  pre.diff {
+    margin: .3rem 0 0; padding: .55rem .8rem; border-left: 4px solid; border-radius: 3px;
+    font: .85rem/1.55 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+  }
+  pre.del { background: var(--red-tint); border-color: var(--red); }
+  pre.add { background: var(--green-tint); border-color: var(--green); }
+  pre.diff .g { user-select: none; margin-right: .6rem; font-weight: 700; }
+
+  details { margin-top: 1rem; }
+  summary { cursor: pointer; font-weight: 700; padding: .4rem 0; }
+  iframe.preview { width: 100%; height: 30rem; border: 2px solid var(--ink); border-radius: 6px; background: #fff; margin-top: .5rem; }
+  .bar { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1.5rem 0 0; }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .primary, .secondary { transition: background-color .15s, color .15s; }
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to main content</a>
+<div class="wrap">
+  <header class="top">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><circle cx="13" cy="13" r="11" fill="none" stroke="#101a3a" stroke-width="2.5"/><path d="M13 2a11 11 0 0 1 0 22z" fill="#101a3a"/></svg>
+    <span>Accessibility Fixer</span>
+  </header>
+
+  <main id="main">
+    <h1>Find what blocks people on your page, then fix it.</h1>
+    <p class="lede">A scanner finds the problems. An open-weight model writes the missing alt text, labels and titles. The scanner checks every fix before you see it.</p>
+
+    <form id="form">
+      <fieldset>
+        <legend>What do you want to scan?</legend>
+        <label><input type="radio" name="mode" value="url" checked> A web page address</label>
+        <label><input type="radio" name="mode" value="html"> HTML code</label>
+      </fieldset>
+      <div class="field" id="url-field">
+        <label for="url">Page address</label>
+        <input id="url" type="url" inputmode="url" placeholder="https://example.com" autocomplete="url">
+      </div>
+      <div class="field" id="html-field" hidden>
+        <label for="html">HTML to scan</label>
+        <textarea id="html" rows="9" spellcheck="false" placeholder="Paste a full page or just a snippet"></textarea>
+      </div>
+      <div class="actions">
+        <button type="submit" class="primary" id="go">Scan and fix</button>
+        <button type="button" class="linkish" id="sample">Use the broken sample page</button>
+      </div>
+      <p id="error" role="alert" hidden></p>
+    </form>
+
+    <section id="progress" aria-labelledby="progress-h" hidden>
+      <h2 id="progress-h">Progress</h2>
+      <ul id="log" aria-live="polite"></ul>
+    </section>
+
+    <section id="result" aria-labelledby="result-h" hidden>
+      <h2 id="result-h" tabindex="-1">Result</h2>
+      <p class="big">
+        <span class="b" id="n-before">0</span>
+        <span class="to" aria-hidden="true">→</span>
+        <span class="a" id="n-after">0</span>
+      </p>
+      <p class="sentence" id="sentence"></p>
+      <p class="meta" id="meta"></p>
+      <div class="bar">
+        <button type="button" class="secondary" id="download">Download fixed HTML</button>
+      </div>
+
+      <h2>Changes made</h2>
+      <ul class="rows" id="fixes"></ul>
+      <button type="button" class="linkish" id="more" hidden></button>
+
+      <div id="remaining-wrap" hidden>
+        <h2>Still needs a person</h2>
+        <p class="meta">These need a human decision, so they were left alone.</p>
+        <ul class="rows" id="remaining"></ul>
+      </div>
+
+      <details id="preview-wrap" hidden>
+        <summary>Preview the fixed page</summary>
+        <iframe class="preview" id="preview" title="Preview of the fixed page" sandbox=""></iframe>
+      </details>
+    </section>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const RULE_LABEL = {
+  "html-has-lang": "Page language missing",
+  "document-title": "Page title missing",
+  "meta-viewport": "Zoom is blocked",
+  "image-alt": "Image has no alt text",
+  "alt-is-filename": "Alt text is a file name",
+  "label": "Form field has no label",
+  "button-name": "Button has no name",
+  "link-name": "Link has no name",
+  "frame-title": "Embedded frame has no title",
+  "color-contrast": "Text contrast too low",
+  "heading-order": "Heading levels skip a step",
+};
+const IMPACT_LABEL = { critical: "Critical", serious: "Serious", moderate: "Moderate", minor: "Minor" };
+const SHOWN = 8;
+let fixedHtml = "";
+let fixes = [];
+
+function h(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+
+function setMode(mode) {
+  document.querySelector(`input[name=mode][value=${mode}]`).checked = true;
+  $("url-field").hidden = mode !== "url";
+  $("html-field").hidden = mode !== "html";
+}
+document.querySelectorAll("input[name=mode]").forEach((r) =>
+  r.addEventListener("change", () => setMode(r.value)));
+
+$("sample").addEventListener("click", async () => {
+  const res = await fetch("/sample.html");
+  $("html").value = await res.text();
+  setMode("html");
+  $("form").requestSubmit();
+});
+
+function logLine(text, cls, strong) {
+  const li = h("li", cls);
+  if (strong) li.append(h("strong", null, strong + " "));
+  li.append(document.createTextNode(text));
+  $("log").append(li);
+  return li;
+}
+
+function animate(el, to, ms = 900) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches || to === 0) { el.textContent = to; return; }
+  const t0 = performance.now();
+  (function tick(now) {
+    const p = Math.min(1, (now - t0) / ms);
+    el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3)));
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+function diffBlock(cls, glyph, label, text) {
+  const pre = h("pre", "diff " + cls);
+  const g = h("span", "g", glyph); g.setAttribute("aria-hidden", "true");
+  pre.append(g, h("span", "sr-only", label + ": "), document.createTextNode(text));
+  return pre;
+}
+
+function fixRow(f) {
+  const li = h("li");
+  const head = h("div", "head");
+  head.append(
+    h("span", "title", RULE_LABEL[f.rule] || f.rule),
+    h("span", "impact " + f.impact, IMPACT_LABEL[f.impact] || f.impact),
+    h("span", "src", f.source === "model" ? "Written by the model" : "Fixed by code"),
+  );
+  li.append(head);
+  if (f.why) li.append(h("p", "why", f.why));
+  li.append(diffBlock("del", "−", "Before", f.before), diffBlock("add", "+", "After", f.after));
+  return li;
+}
+
+function renderFixes(showAll) {
+  const list = $("fixes");
+  list.replaceChildren();
+  (showAll ? fixes : fixes.slice(0, SHOWN)).forEach((f) => list.append(fixRow(f)));
+  const more = $("more");
+  more.hidden = fixes.length <= SHOWN;
+  more.textContent = showAll ? "Show fewer changes" : `Show all ${fixes.length} changes`;
+  more.onclick = () => renderFixes(!showAll);
+}
+
+function showDone(d) {
+  fixedHtml = d.fixed_html;
+  $("result").hidden = false;
+  animate($("n-before"), d.before);
+  animate($("n-after"), d.after);
+  const fixed = Math.max(0, d.before - d.after);
+  $("sentence").textContent =
+    `${plural(d.before, "issue")} found, ${fixed} fixed, ${d.after} remaining.`;
+  const bits = [`Accessibility score ${d.score_before} → ${d.score_after}.`];
+  if (d.fixes) bits.push(`${plural(d.fixes, "fix")} applied`
+    + (d.rejected ? `, ${plural(d.rejected, "weak model answer")} rejected by the quality gate.` : "."));
+  bits.push(`${plural(d.llm_calls, "model call")} to ${d.model} in ${d.seconds} seconds.`);
+  if (d.errors && d.errors.length) bits.push(`Model errors: ${d.errors[0]}`);
+  $("meta").textContent = bits.join(" ");
+
+  renderFixes(false);
+
+  $("remaining").replaceChildren();
+  $("remaining-wrap").hidden = !d.remaining.length;
+  d.remaining.forEach((r) => {
+    const li = h("li");
+    const head = h("div", "head");
+    head.append(h("span", "title", RULE_LABEL[r.rule] || r.rule), h("span", "impact " + r.impact, IMPACT_LABEL[r.impact]));
+    li.append(head, h("p", "why", r.message), diffBlock("del", "", "Element", r.snippet));
+    $("remaining").append(li);
+  });
+
+  const pv = d.preview_html || d.fixed_html;
+  $("preview").srcdoc = pv;
+  $("preview-wrap").hidden = false;
+  $("result").scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+  $("result-h").focus({ preventScroll: true });
+}
+
+function handle(ev) {
+  if (ev.type === "stage") logLine(ev.text);
+  else if (ev.type === "scan" && ev.phase === "before") {
+    const parts = Object.entries(ev.by_impact).map(([k, v]) => `${v} ${k}`).join(", ");
+    logLine(`${plural(ev.count, "issue")} found (${parts || "none"}). Accessibility score ${ev.score}.`, "", "Scan complete.");
+  } else if (ev.type === "scan" && ev.phase === "after") logLine(`${plural(ev.count, "issue")} left. Accessibility score ${ev.score}.`, "", "Re-scan complete.");
+  else if (ev.type === "fix") {
+    fixes.push(ev);
+    if (fixes.length <= 40) logLine(ev.value === "" ? "marked as decorative" : `“${ev.value}”`, "fix", (RULE_LABEL[ev.rule] || ev.rule) + ":");
+    else if (fixes.length === 41) logLine("More fixes are being applied…");
+  } else if (ev.type === "rejected") logLine(ev.reason, "rej", "Quality gate rejected a fix:");
+  else if (ev.type === "error") showError(ev.text);
+  else if (ev.type === "done") showDone(ev);
+}
+
+function showError(msg) {
+  $("error").textContent = msg;
+  $("error").hidden = false;
+}
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const mode = document.querySelector("input[name=mode]:checked").value;
+  const payload = mode === "url" ? { url: $("url").value } : { html: $("html").value };
+  $("error").hidden = true;
+  $("result").hidden = true;
+  $("log").replaceChildren();
+  $("progress").hidden = false;
+  fixes = [];
+  const btn = $("go");
+  btn.disabled = true; btn.textContent = "Working…"; btn.setAttribute("aria-busy", "true");
+  try {
+    const res = await fetch("/api/fix", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+    if (!res.ok || !res.body) throw new Error(`The server returned status ${res.status}.`);
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (line) handle(JSON.parse(line));
+      }
+    }
+  } catch (err) {
+    showError(err.message || "Could not reach the server.");
+  } finally {
+    btn.disabled = false; btn.textContent = "Scan and fix"; btn.removeAttribute("aria-busy");
+  }
+});
+
+$("download").addEventListener("click", () => {
+  const blob = new Blob([fixedHtml], { type: "text/html" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "fixed.html";
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+</script>
+</body>
+</html>
